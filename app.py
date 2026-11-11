@@ -266,7 +266,11 @@ if question:
                 result = rag_pipeline.answer_question(
                     question, get_embedding_model(), document, get_gemini_client(api_key))
         except genai_errors.APIError as error:
-            st.error(f"Gemini returned an error ({error.code}): {error.message}", title="LLM request failed")
+            if error.code in rag_pipeline.RETRYABLE_STATUS_CODES:
+                st.warning("Gemini is busy right now and did not answer after several tries. "
+                           "Please ask again in a minute.", title="Gemini is overloaded")
+            else:
+                st.error(f"Gemini returned an error ({error.code}): {error.message}", title="LLM request failed")
             st.session_state.messages.pop()  # forget the unanswered question
             st.stop()
 

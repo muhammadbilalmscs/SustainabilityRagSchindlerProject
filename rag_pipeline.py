@@ -31,11 +31,14 @@ Hallucination prevention (three layers)
 
 import json
 import os
+import random
 import re
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel, Field
 
@@ -49,6 +52,10 @@ from vector_store import build_index, search
 DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 TOP_K = 5          # best chunks overall
 EXTRA_TABLES = 2   # plus the best table chunks, if not already among them (see retrieve())
+
+RETRYABLE_STATUS_CODES = {429, 500, 503, 504}  # busy / temporary server errors
+MAX_ATTEMPTS = 4                               # per model: 1 try + 3 retries
+RETRY_BASE_DELAY = 1.0                         # seconds; doubles each retry
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +78,14 @@ def get_api_key():
 def get_model_name():
     """The Gemini model to use; override with GEMINI_MODEL in .env or secrets."""
     return os.getenv("GEMINI_MODEL", DEFAULT_GEMINI_MODEL)
+
+
+def get_fallback_model_name():
+    """
+    Optional second model, used only if the main one stays overloaded after all
+    retries. Set GEMINI_FALLBACK_MODEL in .env or secrets; empty means no fallback.
+    """
+    return os.getenv("GEMINI_FALLBACK_MODEL", "").strip() or None
 
 
 def create_client(api_key):
@@ -108,6 +123,24 @@ Rules:
 Be concise and well structured."""
 
 
+def _generate_with_retry(client, model, prompt, config):
+    """
+    Call Gemini, retrying with exponential backoff when the service is busy.
+
+    503 (overloaded) and 429 (rate limit) are usually over within seconds, so we
+    wait 1 s, 2 s, 4 s ... between attempts. Other errors (bad key, bad request)
+    will not fix themselves, so they are raised immediately.
+    """
+    for attempt in range(MAX_ATTEMPTS):
+        try:
+            return client.models.generate_content(model=model, contents=prompt, config=config)
+        except genai_errors.APIError as error:
+            is_last_attempt = attempt == MAX_ATTEMPTS - 1
+            if is_last_attempt or error.code not in RETRYABLE_STATUS_CODES:
+                raise
+            time.sleep(RETRY_BASE_DELAY * 2 ** attempt + random.uniform(0, 0.5))
+
+
 def ask_gemini(client, question, context, model_name=None):
     """
     Send the question and the retrieved context to Gemini.
@@ -116,16 +149,26 @@ def ask_gemini(client, question, context, model_name=None):
     Output: RagAnswer object (answer text, sufficiency flag, list of Figure)
     """
     prompt = f"SOURCES:\n{context}\n\nQUESTION: {question}"
-
-    response = client.models.generate_content(
-        model=model_name or get_model_name(),
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_INSTRUCTION,
-            response_mime_type="application/json",  # ask for JSON, not prose
-            response_schema=RagAnswer,              # ... in exactly this shape
-        ),
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM_INSTRUCTION,
+        response_mime_type="application/json",  # ask for JSON, not prose
+        response_schema=RagAnswer,              # ... in exactly this shape
     )
+
+    # Try the main model with retries, then the optional fallback model.
+    models = [model_name or get_model_name()]
+    fallback = get_fallback_model_name()
+    if fallback and fallback not in models:
+        models.append(fallback)
+
+    for model_index, model in enumerate(models):
+        try:
+            response = _generate_with_retry(client, model, prompt, config)
+            break
+        except genai_errors.APIError as error:
+            is_last_model = model_index == len(models) - 1
+            if is_last_model or error.code not in RETRYABLE_STATUS_CODES:
+                raise
 
     # The SDK converts the JSON into our RagAnswer class for us.
     if response.parsed is not None:
