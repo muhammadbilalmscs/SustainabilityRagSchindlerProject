@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------
+# Secrets - NEVER commit real API keys
+# ---------------------------------------------------------------
+.env
+.env.*
+# The template (no real key) IS committed:
+!.env.example
+# Streamlit secrets (local copy of the Cloud "Secrets"):
+.streamlit/secrets.toml
+secrets.toml
+*.key
+*.pem
+credentials*.json
+service-account*.json
+
+# ---------------------------------------------------------------
+# Documents - reports are uploaded at runtime, never stored in Git
+# ---------------------------------------------------------------
+data/
+uploads/
+*.pdf
+*.docx
+*.xlsx
+
+# Saved indexes / embeddings (the app rebuilds them from the upload)
+*.faiss
+*.index
+*.npy
+*.pkl
+
+# ---------------------------------------------------------------
+# Python and tools
+# ---------------------------------------------------------------
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Editors and OS files
+.vscode/
+.idea/
+.vs/
+.DS_Store
+Thumbs.db

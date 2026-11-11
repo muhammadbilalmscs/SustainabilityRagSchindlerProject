@@ -1,0 +1,18 @@
+# Phase 1 - PDF reading
+pymupdf>=1.26          # fast page-by-page text extraction (imported as "pymupdf")
+pdfplumber>=0.11       # table extraction (evaluated in Phase 7)
+pandas>=2.2            # tables as DataFrames
+
+# Phase 3 - embeddings
+sentence-transformers>=3.0
+
+# Phase 4 - vector search
+faiss-cpu>=1.8
+
+# Phase 5 - LLM
+google-genai>=1.0      # the current official Gemini SDK
+python-dotenv>=1.0     # loads GEMINI_API_KEY from .env locally
+
+# Phase 7-8 - charts and UI
+plotly>=5.20
+streamlit>=1.40
