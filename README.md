@@ -1,5 +1,11 @@
 # Sustainability Report RAG Assistant (Schindler)
 
+**Live app:** <https://sustainabilityragschindlerproject-ka3nyabhpaaaxloktvap8x.streamlit.app/>
+
+Upload the Schindler Nonfinancial Report 2025 (or another sustainability report PDF) in the sidebar and ask a
+question. The first upload takes about a minute while the PDF is processed. If the app has been asleep, Streamlit
+wakes it up first, which also takes a minute.
+
 A beginner-friendly **Retrieval-Augmented Generation (RAG)** app. You upload a sustainability report (PDF),
 ask questions in plain English, and get answers that:
 
